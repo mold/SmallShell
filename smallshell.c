@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define MAX_INPUT_LEN 70
@@ -31,7 +32,6 @@ int main()
 		/* Get next command */
 		if(fgets(g_input, MAX_INPUT_LEN, stdin) == NULL)
 			continue;
-		//fprintf(stderr, "Input: %s", g_input);
 
 		bool isAsync = false;
 		{
@@ -55,7 +55,6 @@ int main()
 			while(param != NULL)
 			{
 				g_params[count] = param;
-				//printf("%s\n", g_params[count]);
 				count++;		
 				param = strtok(NULL, " ");
 			}
