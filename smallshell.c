@@ -95,7 +95,7 @@ int executeSync(char *command, char *args[])
 		}
 
 		/* print child status and execution duration */
-		long durationTimeMillis = startTime - getCurrentTimeMillis();
+		long durationTimeMillis = getCurrentTimeMillis() - startTime;
 		fprintf(stdout, "Stopped: %s (PID: %d) with status %d Runtime: %lo ms.\n", command, pid, status, durationTimeMillis);
 	}
 
