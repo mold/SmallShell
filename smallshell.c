@@ -21,6 +21,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define MAX_INPUT_LEN 70
 #define MAX_PARAM 35
@@ -40,25 +41,42 @@ void executeAsync(char *command, char *args[]);
 /* Gets the current timestamp in milliseconds */
 long getCurrentTimeMillis();
 
+/* Handles keyboard interrups */
+void interruptHandler();
+
+/* Handles termination interrupts */
+void terminationHandler();
+
 /* global variables */
 char * g_params [MAX_PARAM];	/* Array of pointers containing parameters parsed from command line */
 char g_input[MAX_INPUT_LEN];	/* Temporary array for storing input from command line */
 int g_numParams;				/* Number of parameters parsed */
 int g_numProcesses;				/* Number of active background processes */
+bool g_foregroundRunning;		/* is a foreground process running or not */
+pid_t g_foregroundPid;			/* PID of the running foreground process */
 
 /* Program entry point */
 int main()
 {
 	/* Setup signal handler */
+	if(sigset(SIGINT, interruptHandler) == -1 || sigset(SIGTERM, terminationHandler) == -1)
+	{
+		fprintf(stderr, "Error with sigset.");
+		exit(1);
+	}
 
 	g_numProcesses = 0;		/* Set number of processes running in background to zero */
+
+	g_foregroundPid = -1;	/* No foreground process running */
+	g_foregroundRunning = false;
+
 	bool isRunning = true;
 	while(isRunning)
 	{
 		/* Check for terminated child processes */
 		checkChildrenStatus();
 
-		printf("$");
+		printf("$ ");
 		/* Get next command */
 		if(fgets(g_input, MAX_INPUT_LEN, stdin) == NULL)
 			continue;
@@ -91,6 +109,7 @@ int main()
 				int ret = chdir(g_params[1]);
 				if(ret != 0)
 				{
+					printf("No such directory, changing to home directory.");
 					chdir(getenv("HOME"));
 				}
 			}
@@ -211,8 +230,12 @@ void executeSync(char *command, char *args[])
 	}
 	else
 	{
-		printf("Spawned foreground process pid: %d\n", pid);
 		/* Parent process */
+
+		printf("Spawned foreground process pid: %d\n", pid);
+
+		g_foregroundRunning = true;
+		g_foregroundPid = pid;
 
 		/* wait for child to terminate */
 		int status;
@@ -220,14 +243,25 @@ void executeSync(char *command, char *args[])
 
 		if(res == -1)
 		{
-			fprintf(stderr, "Wait for %d failed.\n", pid);
-			exit(1);
+			if(g_foregroundRunning == false)
+			{
+				/* waitpid failed because of a keyboard interrupt of the foreground process */
+				return;
+			}
+			else
+			{
+				/* waitpid failed when it shouldn't have */
+				fprintf(stderr, "Wait for %d failed.\n", pid);
+				exit(1);
+			}
 		}
 
 		/* print child status and execution duration */
 		long durationTimeMillis = getCurrentTimeMillis() - startTime;
 		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %lo ms.\n",
 			pid, status, durationTimeMillis);
+		g_foregroundRunning = false;
+		g_foregroundPid = -1;
 	}
 }
 
@@ -259,6 +293,9 @@ void executeAsync(char *command, char *args[])
 	{
 		printf("Spawned background process pid: %d\n", pid);
 		g_numProcesses++;
+
+		/* Set process group of child to the same as parent */
+		setpgid(pid, getpgid(0));
 	}
 }
 /**
@@ -273,3 +310,56 @@ long getCurrentTimeMillis()
 }
 
 
+/**
+* Handles keyboard interrupts.
+*
+* First terminates running foreground processes, then possible
+* child processes, then the shell itself.
+*/
+void interruptHandler()
+{
+	if(g_foregroundRunning)
+	{
+		/* Kill foreground process */
+		int res = kill(g_foregroundPid, SIGKILL);
+		if(res == -1)
+		{
+			fprintf(stderr, "Kill of foreground process %d failed.", g_foregroundPid);
+		}
+		else
+		{
+			/* wait for foreground process to avoid zombie */
+			waitpid(g_foregroundPid, (char *) NULL, 0);
+
+			printf("Foreground process %d killed.\n", g_foregroundPid);
+
+			g_foregroundRunning = false;
+			g_foregroundPid = -1;
+		}
+	}
+	else if(g_numProcesses > 0)
+	{
+		/* Kill child processes, send sigkill to process group */
+		int res = killpg(0, SIGKILL);
+		if(res == -1)
+		{
+			fprintf(stderr, "Kill of background processeses failed.");
+		}
+
+		/* Wait to prevent zombies */
+		checkChildrenStatus();
+	}
+	else
+	{
+		/* Exit shell */
+		exit(0);
+	}
+}
+
+/**
+* Handles terminations by killing all child processes.
+*/
+void terminationHandler()
+{
+
+}
