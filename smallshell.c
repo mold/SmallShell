@@ -8,8 +8,8 @@
 #define MAX_INPUT_LEN 70
 #define MAX_PARAM 35
 
-int executeSync(char *command, int argc, char *args[]);
-int executeAsync(char *command, int argc, char *args[]);
+int executeSync(char *command, char *args[]);
+int executeAsync(char *command, char *args[]);
 
 int checkChildrenStatus();
 long getCurrentTimeMillis();
@@ -31,6 +31,9 @@ int main(int argc, char *args[])
 			continue;
 		//fprintf(stderr, "Input: %s", input);
 		
+		char *newLine = strchr(g_input, '\n');
+		*newLine = '\0';
+
 		/* Parse command */
 		{
 			char * param = strtok(g_input, " ");
@@ -44,7 +47,9 @@ int main(int argc, char *args[])
 			}
 			g_params[count] = (char *) NULL;
 		}
+
 		/* Start synchronous process */
+		executeSync(g_params[0], g_params);
 
 		/* Start async process */
 	}
@@ -53,7 +58,7 @@ int main(int argc, char *args[])
 /**
  * Executes a synchronous (foreground) process.
 */
-int executeSync(char *command, int argc, char *args[])
+int executeSync(char *command, char *args[])
 {
 	/* Save start time */
 	long startTime = getCurrentTimeMillis();
@@ -100,7 +105,7 @@ int executeSync(char *command, int argc, char *args[])
 /**
  * Executes an asynchronous (background) process.
 */
-int executeAsync(char *command, int argc, char *args[])
+int executeAsync(char *command, char *args[])
 {
 	return 0;
 }
@@ -122,7 +127,7 @@ long getCurrentTimeMillis()
 	struct timeval tv;
 	int res = gettimeofday(&tv, NULL);
 
-	fprintf(stderr, "sec: %d usec: %d\n", tv.tv_sec, tv.tv_usec);	
+	/*	fprintf(stderr, "sec: %d usec: %d\n", tv.tv_sec, tv.tv_usec);	*/
 
 	return (long)(tv.tv_sec*1000 + tv.tv_usec/1000);
 }
