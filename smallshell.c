@@ -1,12 +1,12 @@
 /*
  * NAME:
  *	SmallShell	-	A small shell/command line interface for UNIX.
- * 
+ *
  * SYNTAX:
  *	SmallShell
  *
  * DESCRIPTION:
- * 	
+ *
  *
  * AUTHOR:
  *	Daniel Molin <dmol@kth.se>
@@ -25,16 +25,16 @@
 #define MAX_INPUT_LEN 70
 #define MAX_PARAM 35
 
-/* Checks and prints status of background child process that have exited */
+/* Checks and prints status of background child processes that have exited */
 void checkChildrenStatus();
 
 /* Parses parameters from input array */
 bool parseParams();
 
-/* Executes 'command' synchronously in a sepprate process using 'args' as arguments*/
+/* Executes 'command' synchronously but in a separate process using 'args' as arguments*/
 void executeSync(char *command, char *args[]);
 
-/* Executes 'command' asynchronously in a sepprate process using 'args' as arguments*/
+/* Executes 'command' asynchronously in a separate process using 'args' as arguments*/
 void executeAsync(char *command, char *args[]);
 
 /* Gets the current timestamp in milliseconds */
@@ -54,7 +54,7 @@ int main()
 	g_numProcesses = 0;		/* Set number of processes running in background to zero */
 	bool isRunning = true;
 	while(isRunning)
-	{	
+	{
 		/* Check for terminated child processes */
 		checkChildrenStatus();
 
@@ -78,7 +78,7 @@ int main()
 			continue;
 		}
 
-		/* Check if there is a trailing tilda in the params, tilda == run process asynchronously */
+		/* Check if there is a trailing ampersand in the params, ampersand == run process asynchronously */
 		bool isAsync = false;
 		if(g_numParams > 1)
 		{
@@ -93,7 +93,7 @@ int main()
 		{
 			executeSync(g_params[0], g_params);
 		}
-		/* Start asynchrouns process */
+		/* Start asynchronus process */
 		else
 		{
 			executeAsync(g_params[0], g_params);
@@ -116,7 +116,7 @@ void checkChildrenStatus()
 		pid_t id = waitpid(-1, &status, WNOHANG );
 
 		if(id == -1)
-		{	
+		{
 			fprintf(stderr, "Wait failed.\n");
 			exit(1);
 		}
@@ -134,6 +134,8 @@ void checkChildrenStatus()
 }
 /*
  *	Parses parameters from input array and stores them in a array of pointers.
+ *
+ *	Returns true on success and false otherwise (for faulty input e.g. no command name)
  */
 bool parseParams()
 {
@@ -147,7 +149,7 @@ bool parseParams()
 	while(param != NULL)
 	{
 		g_params[count] = param;
-		count++;		
+		count++;
 		param = strtok(NULL, " ");
 	}
 
@@ -173,7 +175,7 @@ void executeSync(char *command, char *args[])
 		/* child process */
 
 		/* Execute command */
-		execvp(command, args);		
+		execvp(command, args);
 		fprintf(stderr, "Execvp (%s) failed. errno: %d\n", command, errno);
 		exit(1);
 	}
@@ -190,9 +192,9 @@ void executeSync(char *command, char *args[])
 		/* wait for child to terminate */
 		int status;
 		int res = waitpid(pid, &status, 0);
-		
+
 		if(res == -1)
-		{	
+		{
 			fprintf(stderr, "Wait for %d failed.\n", pid);
 			exit(1);
 		}
@@ -219,7 +221,7 @@ void executeAsync(char *command, char *args[])
 		/* child process */
 
 		/* Execute command */
-		execvp(command, args);		
+		execvp(command, args);
 		fprintf(stderr, "Execvp (%s) failed. errno: %d\n", command, errno);
 		exit(1);
 	}
