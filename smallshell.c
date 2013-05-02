@@ -35,6 +35,7 @@ int main()
 		/* Check for terminated child processes */
 		checkChildrenStatus();
 
+		printf("$");
 		/* Get next command */
 		if(fgets(g_input, MAX_INPUT_LEN, stdin) == NULL)
 			continue;
@@ -124,6 +125,7 @@ int executeSync(char *command, char *args[])
 	}
 	else
 	{
+		printf("Spawned foreground process pid: %d\n", pid);
 		/* Parent process */
 
 		/* wait for child to terminate */
@@ -138,7 +140,8 @@ int executeSync(char *command, char *args[])
 
 		/* print child status and execution duration */
 		long durationTimeMillis = getCurrentTimeMillis() - startTime;
-		fprintf(stdout, "Stopped: %s (PID: %d) with status %d Runtime: %lo ms.\n", command, pid, status, durationTimeMillis);
+		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %lo ms.\n",
+			pid, status, durationTimeMillis);
 	}
 
 	return 0;
@@ -168,6 +171,7 @@ int executeAsync(char *command, char *args[])
 	}
 	else
 	{
+		printf("Spawned background process pid: %d\n", pid);
 		g_numProcesses++;
 	}
 
@@ -182,21 +186,28 @@ int checkChildrenStatus()
 {
 	/* Check if any child have terminated */
 	int i;
+	int count = 0;
 	for(i = 0; i < g_numProcesses; i++)
 	{
 		int status;
-		pid_t id = waitpid(-1, &status, WNOHANG);
+		pid_t id = waitpid(-1, &status, WNOHANG );
 
 		if(id == -1)
 		{	
+			fprintf(stderr, "Wait failed.\n");
+			exit(1);
+		}
+		else if(id == 0)
+		{
 			continue;
 		}
 		if(WIFEXITED(status))
 		{
-			g_numProcesses--;
+			count++;
 			fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
 		}
 	}
+	g_numProcesses -= count;
 	return 0;
 }
 
