@@ -1,7 +1,9 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -17,7 +19,7 @@ long getCurrentTimeMillis();
 char * g_params [MAX_PARAM];
 char g_input[MAX_INPUT_LEN];
 
-int main(int argc, char *args[])
+int main()
 {
 	/* Setup signal handler */
 
@@ -29,14 +31,26 @@ int main(int argc, char *args[])
 		/* Get next command */
 		if(fgets(g_input, MAX_INPUT_LEN, stdin) == NULL)
 			continue;
-		//fprintf(stderr, "Input: %s", input);
-		
-		char *newLine = strchr(g_input, '\n');
-		*newLine = '\0';
+		//fprintf(stderr, "Input: %s", g_input);
 
+		bool isAsync = false;
+		{
+			char *newLine = strchr(g_input, '\n');
+			*newLine = '\0';
+
+			char * tilda = strchr(g_input, '&');
+			if(tilda != NULL)
+			{
+				*tilda = ' ';
+				isAsync = true;
+			}
+		}
 		/* Parse command */
 		{
 			char * param = strtok(g_input, " ");
+			if(param == NULL)
+				continue;
+
 			int count = 0;
 			while(param != NULL)
 			{
@@ -48,11 +62,24 @@ int main(int argc, char *args[])
 			g_params[count] = (char *) NULL;
 		}
 
-		/* Start synchronous process */
-		executeSync(g_params[0], g_params);
+		if(!strcmp(g_params[0], "exit"))
+		{
+			isRunning = false;
+			continue;
+		}
 
+		/* Start synchronous process */
+		if(!isAsync)
+		{
+			executeSync(g_params[0], g_params);
+		}
 		/* Start async process */
+		else
+		{
+
+		}
 	}
+	return 0;
 }
 
 /**
@@ -125,7 +152,7 @@ int checkChildrenStatus()
 long getCurrentTimeMillis()
 {
 	struct timeval tv;
-	int res = gettimeofday(&tv, NULL);
+	gettimeofday(&tv, NULL);
 
 	/*	fprintf(stderr, "sec: %d usec: %d\n", tv.tv_sec, tv.tv_usec);	*/
 
