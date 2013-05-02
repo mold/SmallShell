@@ -1,3 +1,17 @@
+/*
+ * NAME:
+ *	SmallShell	-	A small shell/command line interface for UNIX.
+ * 
+ * SYNTAX:
+ *	SmallShell
+ *
+ * DESCRIPTION:
+ * 	
+ *
+ * AUTHOR:
+ *	Daniel Molin <dmol@kth.se>
+ *	Christian Magnerfelt <christian.magnerfelt@gmail.com>
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -11,19 +25,28 @@
 #define MAX_INPUT_LEN 70
 #define MAX_PARAM 35
 
-int executeSync(char *command, char *args[]);
-int executeAsync(char *command, char *args[]);
+/* Checks and prints status of background child process that have exited */
+void checkChildrenStatus();
 
-int checkChildrenStatus();
-long getCurrentTimeMillis();
-
-char * g_params [MAX_PARAM];
-char g_input[MAX_INPUT_LEN];
-int g_numParams;
-int g_numProcesses;
-
+/* Parses parameters from input array */
 bool parseParams();
 
+/* Executes 'command' synchronously in a sepprate process using 'args' as arguments*/
+void executeSync(char *command, char *args[]);
+
+/* Executes 'command' asynchronously in a sepprate process using 'args' as arguments*/
+void executeAsync(char *command, char *args[]);
+
+/* Gets the current timestamp in milliseconds */
+long getCurrentTimeMillis();
+
+/* global variables */
+char * g_params [MAX_PARAM];	/* Array of pointers containing parameters parsed from command line */
+char g_input[MAX_INPUT_LEN];	/* Temporary array for storing input from command line */
+int g_numParams;				/* Number of parameters parsed */
+int g_numProcesses;				/* Number of active background processes */
+
+/* Program entry point */
 int main()
 {
 	/* Setup signal handler */
@@ -78,6 +101,40 @@ int main()
 	}
 	return 0;
 }
+/**
+* Checks all children for any terminated processes and prints
+* information about them.
+*/
+void checkChildrenStatus()
+{
+	/* Check if any child have terminated */
+	int i;
+	int count = 0;
+	for(i = 0; i < g_numProcesses; i++)
+	{
+		int status;
+		pid_t id = waitpid(-1, &status, WNOHANG );
+
+		if(id == -1)
+		{	
+			fprintf(stderr, "Wait failed.\n");
+			exit(1);
+		}
+		else if(id == 0)
+		{
+			continue;
+		}
+		if(WIFEXITED(status))
+		{
+			count++;
+			fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
+		}
+	}
+	g_numProcesses -= count;
+}
+/*
+ *	Parses parameters from input array and stores them in a array of pointers.
+ */
 bool parseParams()
 {
 	char * param = strtok(g_input, " ");
@@ -98,10 +155,12 @@ bool parseParams()
 	g_numParams = count;
 	return true;
 }
-/**
+/*
  * Executes a synchronous (foreground) process.
-*/
-int executeSync(char *command, char *args[])
+ * 'command' The command to execute
+ * 'args' The supplied arguments to 'command'
+ */
+void executeSync(char *command, char *args[])
 {
 	/* Save start time */
 	long startTime = getCurrentTimeMillis();
@@ -143,14 +202,14 @@ int executeSync(char *command, char *args[])
 		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %lo ms.\n",
 			pid, status, durationTimeMillis);
 	}
-
-	return 0;
 }
 
-/**
+/*
  * Executes an asynchronous (background) process.
-*/
-int executeAsync(char *command, char *args[])
+ * 'command' The command to execute
+ * 'args' The supplied arguments to 'command'
+ */
+void executeAsync(char *command, char *args[])
 {
 	/* fork */
 	pid_t pid = fork();
@@ -174,43 +233,7 @@ int executeAsync(char *command, char *args[])
 		printf("Spawned background process pid: %d\n", pid);
 		g_numProcesses++;
 	}
-
-	return 0;
 }
-
-/**
-* Checks all children for any terminated processes and prints
-* information about them.
-*/
-int checkChildrenStatus()
-{
-	/* Check if any child have terminated */
-	int i;
-	int count = 0;
-	for(i = 0; i < g_numProcesses; i++)
-	{
-		int status;
-		pid_t id = waitpid(-1, &status, WNOHANG );
-
-		if(id == -1)
-		{	
-			fprintf(stderr, "Wait failed.\n");
-			exit(1);
-		}
-		else if(id == 0)
-		{
-			continue;
-		}
-		if(WIFEXITED(status))
-		{
-			count++;
-			fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
-		}
-	}
-	g_numProcesses -= count;
-	return 0;
-}
-
 /**
 * Returns the current time in milliseconds (since the Epoch).
 */
@@ -218,8 +241,6 @@ long getCurrentTimeMillis()
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-
-	/*	fprintf(stderr, "sec: %d usec: %d\n", tv.tv_sec, tv.tv_usec);	*/
 
 	return (long)(tv.tv_sec*1000 + tv.tv_usec/1000);
 }
