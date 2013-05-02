@@ -1,6 +1,6 @@
 debug:
-	gcc -O0 -Wall -g -Wextra -o SmallShell smallshell.c
+	gcc -O0 -Wall -g -Wextra -ansi -o SmallShell smallshell.c
 release:
-	gcc -O2 -Wall -Wextra -o SmallShell smallshell.c
+	gcc -O2 -Wall -Wextra -ansi -o SmallShell smallshell.c
 clean:
 	rm SmallShell

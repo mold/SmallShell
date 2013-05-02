@@ -1,64 +1,166 @@
+/*
+ * NAME:
+ *	SmallShell	-	A small shell/command line interface for UNIX.
+ * 
+ * SYNTAX:
+ *	SmallShell
+ *
+ * DESCRIPTION:
+ * 	
+ *
+ * AUTHOR:
+ *	Daniel Molin <dmol@kth.se>
+ *	Christian Magnerfelt <christian.magnerfelt@gmail.com>
+ */
+#include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #define MAX_INPUT_LEN 70
 #define MAX_PARAM 35
 
-int executeSync(char *command, char *args[]);
-int executeAsync(char *command, char *args[]);
+/* Checks and prints status of background child process that have exited */
+void checkChildrenStatus();
 
-int checkChildrenStatus();
+/* Parses parameters from input array */
+bool parseParams();
+
+/* Executes 'command' synchronously in a sepprate process using 'args' as arguments*/
+void executeSync(char *command, char *args[]);
+
+/* Executes 'command' asynchronously in a sepprate process using 'args' as arguments*/
+void executeAsync(char *command, char *args[]);
+
+/* Gets the current timestamp in milliseconds */
 long getCurrentTimeMillis();
 
-char * g_params [MAX_PARAM];
-char g_input[MAX_INPUT_LEN];
+/* global variables */
+char * g_params [MAX_PARAM];	/* Array of pointers containing parameters parsed from command line */
+char g_input[MAX_INPUT_LEN];	/* Temporary array for storing input from command line */
+int g_numParams;				/* Number of parameters parsed */
+int g_numProcesses;				/* Number of active background processes */
 
-int main(int argc, char *args[])
+/* Program entry point */
+int main()
 {
 	/* Setup signal handler */
 
+	g_numProcesses = 0;		/* Set number of processes running in background to zero */
 	bool isRunning = true;
 	while(isRunning)
 	{	
 		/* Check for terminated child processes */
+		checkChildrenStatus();
 
+		printf("$");
 		/* Get next command */
 		if(fgets(g_input, MAX_INPUT_LEN, stdin) == NULL)
 			continue;
-		//fprintf(stderr, "Input: %s", input);
-		
+
+		/* Replace end-line character with null-terminator */
 		char *newLine = strchr(g_input, '\n');
 		*newLine = '\0';
 
-		/* Parse command */
+		/* Parse params from input */
+		if(!parseParams())
+			continue;
+
+		/* Do we want to exit the shell? */
+		if(!strcmp(g_params[0], "exit"))
 		{
-			char * param = strtok(g_input, " ");
-			int count = 0;
-			while(param != NULL)
-			{
-				g_params[count] = param;
-				//printf("%s\n", g_params[count]);
-				count++;		
-				param = strtok(NULL, " ");
-			}
-			g_params[count] = (char *) NULL;
+			isRunning = false;
+			continue;
 		}
 
+		/* Check if there is a trailing tilda in the params, tilda == run process asynchronously */
+		bool isAsync = false;
+		if(g_numParams > 1)
+		{
+			if(!strcmp(g_params[g_numParams - 1], "&"))
+			{
+				g_params[g_numParams - 1] = (char *) NULL;
+				isAsync = true;
+			}
+		}
 		/* Start synchronous process */
-		executeSync(g_params[0], g_params);
-
-		/* Start async process */
+		if(!isAsync)
+		{
+			executeSync(g_params[0], g_params);
+		}
+		/* Start asynchrouns process */
+		else
+		{
+			executeAsync(g_params[0], g_params);
+		}
 	}
+	return 0;
 }
-
 /**
- * Executes a synchronous (foreground) process.
+* Checks all children for any terminated processes and prints
+* information about them.
 */
-int executeSync(char *command, char *args[])
+void checkChildrenStatus()
+{
+	/* Check if any child have terminated */
+	int i;
+	int count = 0;
+	for(i = 0; i < g_numProcesses; i++)
+	{
+		int status;
+		pid_t id = waitpid(-1, &status, WNOHANG );
+
+		if(id == -1)
+		{	
+			fprintf(stderr, "Wait failed.\n");
+			exit(1);
+		}
+		else if(id == 0)
+		{
+			continue;
+		}
+		if(WIFEXITED(status))
+		{
+			count++;
+			fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
+		}
+	}
+	g_numProcesses -= count;
+}
+/*
+ *	Parses parameters from input array and stores them in a array of pointers.
+ */
+bool parseParams()
+{
+	char * param = strtok(g_input, " ");
+	/* Check if have characters in input */
+	if(param == NULL)
+		return false;	/* No characters, parse fail */
+
+	/* Tokenize input and store ptr to string in global params */
+	int count = 0;
+	while(param != NULL)
+	{
+		g_params[count] = param;
+		count++;		
+		param = strtok(NULL, " ");
+	}
+
+	g_params[count] = (char *) NULL;
+	g_numParams = count;
+	return true;
+}
+/*
+ * Executes a synchronous (foreground) process.
+ * 'command' The command to execute
+ * 'args' The supplied arguments to 'command'
+ */
+void executeSync(char *command, char *args[])
 {
 	/* Save start time */
 	long startTime = getCurrentTimeMillis();
@@ -82,6 +184,7 @@ int executeSync(char *command, char *args[])
 	}
 	else
 	{
+		printf("Spawned foreground process pid: %d\n", pid);
 		/* Parent process */
 
 		/* wait for child to terminate */
@@ -96,38 +199,48 @@ int executeSync(char *command, char *args[])
 
 		/* print child status and execution duration */
 		long durationTimeMillis = getCurrentTimeMillis() - startTime;
-		fprintf(stdout, "Stopped: %s (PID: %d) with status %d Runtime: %lo ms.\n", command, pid, status, durationTimeMillis);
+		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %lo ms.\n",
+			pid, status, durationTimeMillis);
 	}
-
-	return 0;
 }
 
-/**
+/*
  * Executes an asynchronous (background) process.
-*/
-int executeAsync(char *command, char *args[])
+ * 'command' The command to execute
+ * 'args' The supplied arguments to 'command'
+ */
+void executeAsync(char *command, char *args[])
 {
-	return 0;
-}
+	/* fork */
+	pid_t pid = fork();
 
-/**
-* Checks all children for any terminated processes and prints
-* information about them.
-*/
-int checkChildrenStatus()
-{
-	return 0;
-}
+	if(pid == 0)
+	{
+		/* child process */
 
+		/* Execute command */
+		execvp(command, args);		
+		fprintf(stderr, "Execvp (%s) failed. errno: %d\n", command, errno);
+		exit(1);
+	}
+	else if(pid == -1){
+		/* Fork failed */
+		fprintf(stderr, "Fork for %s failed. errno: %d\n", command, errno);
+		exit(1);
+	}
+	else
+	{
+		printf("Spawned background process pid: %d\n", pid);
+		g_numProcesses++;
+	}
+}
 /**
 * Returns the current time in milliseconds (since the Epoch).
 */
 long getCurrentTimeMillis()
 {
 	struct timeval tv;
-	int res = gettimeofday(&tv, NULL);
-
-	/*	fprintf(stderr, "sec: %d usec: %d\n", tv.tv_sec, tv.tv_usec);	*/
+	gettimeofday(&tv, NULL);
 
 	return (long)(tv.tv_sec*1000 + tv.tv_usec/1000);
 }
