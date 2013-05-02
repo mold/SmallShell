@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include <stdbool.h>
 
-#define MAX_INPUT_LEN = 70
+#define MAX_INPUT_LEN 70
 
 int executeSync(char *command, int argc, char *args[]);
 int executeAsync(char *command, int argc, char *args[]);
@@ -13,11 +14,14 @@ int main(int argc, char *args[])
 
 	/* Setup signal handler */
 
-	while(true)
+	bool isRunning = true;
+	while(isRunning)
 	{	
 		/* Check for terminated child processes */
 
-		/* Get next command */		
+		/* Get next command */
+		fgets(input, MAX_INPUT_LEN, stdin);
+		fprintf(stderr, "Input: %s", input);
 		
 		/* Parse command */
 		
