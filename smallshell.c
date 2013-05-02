@@ -78,6 +78,29 @@ int main()
 			continue;
 		}
 
+		/* Do we want to change directory? */
+		if(!strcmp(g_params[0], "cd"))
+		{
+			if(g_numParams < 2)
+			{
+				/* Did supply directory path, change to home directory */
+				chdir(getenv("HOME"));
+			}
+			else
+			{
+				int ret = chdir(g_params[1]);
+				if(ret != 0)
+				{
+					chdir(getenv("HOME"));
+				}
+			}
+			char buffer [255];
+			if(getcwd(buffer, 255) != NULL)
+			{
+				printf("Current directory: %s\n", buffer);
+			}
+			continue;
+		}
 		/* Check if there is a trailing ampersand in the params, ampersand == run process asynchronously */
 		bool isAsync = false;
 		if(g_numParams > 1)
@@ -109,7 +132,7 @@ void checkChildrenStatus()
 {
 	/* Check if any child have terminated */
 	int i;
-	int count = 0;
+	int exitCount = 0;
 	for(i = 0; i < g_numProcesses; i++)
 	{
 		int status;
@@ -122,15 +145,17 @@ void checkChildrenStatus()
 		}
 		else if(id == 0)
 		{
+			/* Nothing have happend yet continue */
 			continue;
 		}
 		if(WIFEXITED(status))
 		{
-			count++;
+			exitCount++; /* increase the exit count */
 			fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
 		}
 	}
-	g_numProcesses -= count;
+	/* Subtract the processes that have exited */
+	g_numProcesses -= exitCount;
 }
 /*
  *	Parses parameters from input array and stores them in a array of pointers.
