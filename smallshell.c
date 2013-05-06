@@ -213,6 +213,7 @@ void executeSync(char *command, char *args[])
 {
 	/* Save start time */
 	long startTime = getCurrentTimeMillis();
+	fprintf(stderr, "Starttime: %d\n", startTime);
 
 	/* fork */
 	pid_t pid = fork();
@@ -261,7 +262,8 @@ void executeSync(char *command, char *args[])
 
 		/* print child status and execution duration */
 		long durationTimeMillis = getCurrentTimeMillis() - startTime;
-		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %lo ms.\n",
+
+		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %d ms.\n",
 			pid, status, durationTimeMillis);
 		g_foregroundPid = -1;
 	}
@@ -301,14 +303,14 @@ void executeAsync(char *command, char *args[])
 	  }
 }
 /**
-* Returns the current time in milliseconds (since the Epoch).
+* Returns the current time in milliseconds (based on the time since the Epoch).
 */
 long getCurrentTimeMillis()
 {
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 
-	return (long)(tv.tv_sec*1000 + tv.tv_usec/1000);
+	return 1000*(tv.tv_sec % 10000)+ (tv.tv_usec/1000);
 }
 
 
