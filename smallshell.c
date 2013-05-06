@@ -344,20 +344,7 @@ void interruptHandler()
 	{
 	  fprintf(stderr, "Kill %d children!\nPGID: %d\n",g_numProcesses, getpgid(0));
 
-	  sigset(SIGTERM, SIG_IGN); /* Temporarily ignore SIGTERM to not kill ourselves */
-
-	  /* Kill child processes, send sigkill to process group */
-	  int res = kill(0, SIGTERM);
-	  if(res == -1)
-	    {
-	      fprintf(stderr, "Kill of background processeses failed.\nerrno: %d", errno);		  
-	    }
-	  
-	  
-	  sigset(SIGTERM, SIG_DFL);
-
-	  /* Wait to prevent zombies */
-	  checkChildrenStatus(NULL);
+	  killChildren();
 	  
 	}
 	else
@@ -372,5 +359,28 @@ void interruptHandler()
 */
 void terminationHandler()
 {
-  fprintf(stderr, "PID %d got a SIGTERM.", getpid());
+  killChildren();
+  exit(0);
+}
+
+/**
+ * Kills all running child processes (and waits for them)
+ */
+void killChildren()
+{
+  /* Temporarily ignore SIGTERM to not kill ourselves */
+ sigset(SIGTERM, SIG_IGN); 
+
+ /* Kill child processes, send sigkill to process group */
+ int res = kill(0, SIGTERM);
+ if(res == -1)
+   {
+     fprintf(stderr, "Kill of background processeses failed.\nerrno: %d", errno);		  
+   }
+ 
+ 
+ sigset(SIGTERM, SIG_DFL);
+ 
+ /* Wait to prevent zombies */
+ checkChildrenStatus(NULL);
 }
