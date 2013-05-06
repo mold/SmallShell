@@ -47,12 +47,23 @@ void interruptHandler();
 /* Handles termination interrupts */
 void terminationHandler();
 
+/* Kills all child processes (and waits for them) */
+void killChildren();
+
 /* global variables */
 char * g_params [MAX_PARAM];	/* Array of pointers containing parameters parsed from command line */
 char g_input[MAX_INPUT_LEN];	/* Temporary array for storing input from command line */
 int g_numParams;				/* Number of parameters parsed */
 int g_numProcesses;				/* Number of active background processes */
 pid_t g_foregroundPid;			/* PID of the running foreground process */
+
+/* Function signatures (to avoid warnings when compiling...) */
+typedef void (*sighandler_t)(int);
+int sigset(int sig, sighandler_t disp);
+pid_t getpgid(pid_t pid);
+int kill(pid_t pid, int sig);
+
+
 
 /* Program entry point */
 int main()
@@ -152,12 +163,9 @@ void checkChildrenStatus(int options)
 	int exitCount = 0;
 	for(i = 0; i < g_numProcesses; i++)
 	{
-	  fprintf(stderr, "Wait %d of %d.\n", (i+1), g_numProcesses);
-	  
 	  int status;
 	  pid_t id = waitpid(-1, &status, options );
-	  pid_t gid = getpgid(id);
-	  
+	  	  
 	  if(id == -1)
 	    {
 	      
@@ -167,13 +175,12 @@ void checkChildrenStatus(int options)
 	  else if(id == 0)
 	    {
 	      /* Nothing have happend yet continue */
-	      fprintf(stderr, "wait returned 0 (no processes terminated)\n");
 	      continue;
 	    }
 	  if(!WIFCONTINUED(status))
 	    {
 	      exitCount++; /* increase the exit count */
-	      fprintf(stdout, "Background process (PID: %d, PGID: %d) terminated with status %d\n", id, gid, status);
+	      fprintf(stdout, "Background process (PID: %d) terminated with status %d\n", id, status);
 	    }
 	}
 	/* Subtract the processes that have exited */
@@ -213,7 +220,6 @@ void executeSync(char *command, char *args[])
 {
 	/* Save start time */
 	long startTime = getCurrentTimeMillis();
-	fprintf(stderr, "Starttime: %d\n", startTime);
 
 	/* fork */
 	pid_t pid = fork();
@@ -250,7 +256,7 @@ void executeSync(char *command, char *args[])
 			{
 			  /* waitpid failed because of a keyboard 
 			     interrupt of the foreground process */
-			  return;
+			  
 			}
 			else
 			{
@@ -263,7 +269,7 @@ void executeSync(char *command, char *args[])
 		/* print child status and execution duration */
 		long durationTimeMillis = getCurrentTimeMillis() - startTime;
 
-		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nWallclock time: %d ms.\n",
+		fprintf(stdout, "Foreground process (PID: %d) terminated with status %d\nDuration of execution: %li ms.\n", 
 			pid, status, durationTimeMillis);
 		g_foregroundPid = -1;
 	}
@@ -298,8 +304,6 @@ void executeAsync(char *command, char *args[])
 	    printf("Spawned background process pid: %d\n", pid);
 	    g_numProcesses++;
 	    
-	    fprintf(stderr, "Shell gid: %d, child gid/pid: %d/%d\n",
-		    getpgid(0), getpgid(pid), pid);
 	  }
 }
 /**
@@ -335,14 +339,11 @@ void interruptHandler()
 		  /* wait for foreground process to avoid zombie */
 		  waitpid(g_foregroundPid, NULL, 0);
 		  
-		  printf("Foreground process %d killed.\n", g_foregroundPid);
-		  
 		  g_foregroundPid = -1;
 		}
 	}
 	else if(g_numProcesses > 0)
 	{
-	  fprintf(stderr, "Kill %d children!\nPGID: %d\n",g_numProcesses, getpgid(0));
 
 	  killChildren();
 	  
@@ -382,5 +383,5 @@ void killChildren()
  sigset(SIGTERM, SIG_DFL);
  
  /* Wait to prevent zombies */
- checkChildrenStatus(NULL);
+ checkChildrenStatus(0);
 }
